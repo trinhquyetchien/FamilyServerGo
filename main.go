@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -61,8 +62,9 @@ var (
 	webMu      sync.Mutex
 	webClients = make(map[*safeConn]bool)
 
-	tunnelURL string
-	tunnelMu  sync.RWMutex
+	fixedDomain = "relaxed-major-hen.ngrok-free.app"
+	tunnelURL   = "https://" + fixedDomain
+	tunnelMu    sync.RWMutex
 
 	// Thống kê frame
 	statsMu     sync.Mutex
@@ -300,6 +302,60 @@ func startFPSLogger() {
 	}()
 }
 
+func startNgrokTunnel(domain string, port int, authtoken string) *exec.Cmd {
+	cmdPath, err := exec.LookPath("ngrok")
+	if err != nil {
+		homeDir, _ := os.UserHomeDir()
+		localBin := homeDir + "/.local/bin/ngrok"
+		if _, err := os.Stat(localBin); err == nil {
+			cmdPath = localBin
+		} else {
+			log.Println("[ngrok] Không tìm thấy lệnh 'ngrok', bỏ qua tunnel ngrok")
+			return nil
+		}
+	}
+
+	if authtoken != "" {
+		_ = exec.Command(cmdPath, "config", "add-authtoken", authtoken).Run()
+	}
+
+	args := []string{"http", fmt.Sprintf("--url=%s", domain), fmt.Sprintf("%d", port)}
+	log.Printf("[ngrok] Khởi chạy ngrok: %s %v", cmdPath, args)
+	cmd := exec.Command(cmdPath, args...)
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		log.Printf("[ngrok Pipe Error]: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		log.Printf("[ngrok Start Error]: %v (sẽ fallback Cloudflare tunnel)", err)
+		return nil
+	}
+
+	// Đọc log để phát hiện lỗi xác thực hoặc kết nối thành công
+	if stderrPipe != nil {
+		go func() {
+			buf := make([]byte, 2048)
+			for {
+				n, err := stderrPipe.Read(buf)
+				if n > 0 {
+					out := string(buf[:n])
+					if strings.Contains(out, "ERR_NGROK_") {
+						log.Printf("[ngrok Error]: %s", strings.TrimSpace(out))
+						break
+					}
+				}
+				if err != nil {
+					break
+				}
+			}
+		}()
+	}
+
+	return cmd
+}
+
 func startCloudflaredTunnel(port int) *exec.Cmd {
 	cmdPath, err := exec.LookPath("cloudflared")
 	if err != nil {
@@ -384,6 +440,9 @@ func launchAppWindow(targetURL string) *exec.Cmd {
 func main() {
 	serverOnly := flag.Bool("server-only", false, "Chạy chế độ Headless WebSocket Relay Server (không mở giao diện Desktop GUI)")
 	portFlag := flag.Int("port", 8080, "Cổng lắng nghe của server")
+	domainFlag := flag.String("domain", fixedDomain, "Domain ngrok cố định")
+	authtokenFlag := flag.String("authtoken", os.Getenv("NGROK_AUTHTOKEN"), "ngrok authtoken (nếu cần thiết lập)")
+	useCloudflare := flag.Bool("cloudflare", false, "Ép buộc sử dụng Cloudflare tunnel ngầm thay vì ngrok")
 	flag.Parse()
 
 	port := *portFlag
@@ -402,6 +461,11 @@ func main() {
 	}
 	l.Close()
 
+	// Thiết lập domain cố định
+	if *domainFlag != "" {
+		setTunnelURL("https://" + *domainFlag)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleHTTP)
 	mux.HandleFunc("/ws", handleWebSocket)
@@ -416,6 +480,10 @@ func main() {
 		log.Printf("🚀 Family Remote Go Server đang chạy tại cổng :%d", port)
 		log.Printf("🌐 Web Viewer URL: http://localhost:%d", port)
 		log.Printf("📱 Android WebSocket URL: ws://<IP>:%d/ws", port)
+		if *domainFlag != "" {
+			log.Printf("🔒 Domain cố định: https://%s", *domainFlag)
+			log.Printf("📱 Android WS (Internet): wss://%s/ws", *domainFlag)
+		}
 		log.Printf("=======================================================")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Lỗi server HTTP/WebSocket: %v", err)
@@ -431,28 +499,24 @@ func main() {
 		}
 	}()
 
-	// Khởi động Cloudflare Tunnel ngầm tự động
-	tunnelCmd := startCloudflaredTunnel(port)
+	// Khởi chạy tunnel: Ưu tiên ngrok với domain cố định, fallback Cloudflare
+	var tunnelCmd *exec.Cmd
+	if !*useCloudflare && *domainFlag != "" {
+		tunnelCmd = startNgrokTunnel(*domainFlag, port, *authtokenFlag)
+	}
+	// Nếu không có ngrok hoặc chỉ định cloudflare -> khởi chạy Cloudflare
+	if tunnelCmd == nil {
+		tunnelCmd = startCloudflaredTunnel(port)
+	}
 
 	var windowCmd *exec.Cmd
 	if !*serverOnly {
-		log.Println("[Cloudflare] Đang chờ lấy Cloudflare Tunnel URL công khai...")
-		// Chờ tối đa 8 giây để lấy được URL Cloudflare
-		targetURL := ""
-		for i := 0; i < 16; i++ {
-			u := getTunnelURL()
-			if u != "" {
-				targetURL = u
-				break
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
+		// Mặc định mở cửa sổ với domain cố định nếu có, hoặc fallback local
+		targetURL := getTunnelURL()
 		if targetURL == "" {
-			log.Println("[Cloudflare] Chưa lấy kịp link tunnel, fallback mở local")
 			targetURL = fmt.Sprintf("http://127.0.0.1:%d", port)
-		} else {
-			log.Printf("[Cloudflare] Đã lấy link Cloudflare thành công: %s", targetURL)
 		}
+		log.Printf("[Native Window] Đang mở cửa sổ ứng dụng: %s", targetURL)
 		windowCmd = launchAppWindow(targetURL)
 	} else {
 		log.Println("[Headless Mode] Server đang chạy chế độ không mở cửa sổ GUI Desktop.")

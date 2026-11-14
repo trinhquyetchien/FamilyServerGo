@@ -498,25 +498,29 @@
         let frameCount = 0;
         let currentFps = 0;
 
-        // Tính toán WebSocket URL chuẩn xác theo HTTPS / HTTP hiện tại
+        // URL WebSocket mặc định ưu tiên domain ngrok cố định
+        const FIXED_WS_URL = "wss://relaxed-major-hen.ngrok-free.app/ws";
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let currentWsUrl = `${protocol}//${window.location.host}/ws`;
-        if (wsUrlDisplay) wsUrlDisplay.textContent = currentWsUrl;
-        if (qrCodeImg) {
-            qrCodeImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(currentWsUrl)}`;
-        }
+        let currentWsUrl = window.location.hostname.includes("ngrok") 
+            ? `${protocol}//${window.location.host}/ws` 
+            : FIXED_WS_URL;
 
-        // Lấy thông tin URL Tunnel động nếu có
+        function updateWsUrlDisplay(url) {
+            currentWsUrl = url;
+            if (wsUrlDisplay) wsUrlDisplay.textContent = currentWsUrl;
+            if (qrCodeImg) {
+                qrCodeImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(currentWsUrl)}`;
+            }
+        }
+        updateWsUrlDisplay(currentWsUrl);
+
+        // Lấy thông tin URL Tunnel động từ backend nếu có
         fetch('/api/info')
             .then(res => res.json())
             .then(info => {
                 if (info && info.tunnel_url) {
                     const tunnelWs = info.tunnel_url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/ws';
-                    currentWsUrl = tunnelWs;
-                    if (wsUrlDisplay) wsUrlDisplay.textContent = currentWsUrl;
-                    if (qrCodeImg) {
-                        qrCodeImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(currentWsUrl)}`;
-                    }
+                    updateWsUrlDisplay(tunnelWs);
                 }
             }).catch(() => {});
 

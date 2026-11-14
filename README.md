@@ -1,6 +1,6 @@
 # FamilyServerGo - Ứng Dụng Hỗ Trợ Điều Khiển Điện Thoại Từ Xa
 
-Ứng dụng Server & Desktop Native bằng Go (Golang) cho dự án hỗ trợ người thân điều khiển điện thoại từ xa qua mạng nội bộ hoặc Internet (Cloudflare Tunnel).
+Ứng dụng Server & Desktop Native bằng Go (Golang) cho dự án hỗ trợ người thân điều khiển điện thoại từ xa qua mạng nội bộ hoặc Internet (ngrok domain cố định / Cloudflare Tunnel).
 
 Ứng dụng thay thế hoàn toàn Node.js server cũ, tích hợp cả **WebSocket Relay Server hiệu năng cao** và **Giao diện Desktop Native Client** trong một file thực thi duy nhất (`family-remote`).
 
@@ -10,6 +10,11 @@
 
 ### 1. WebSocket Relay Server (Back-end Go)
 - **Tương thích hoàn toàn với ứng dụng Android**: Lắng nghe WebSocket tại `/` và `/ws` trên cổng `8080`.
+- **Hỗ trợ Domain Cố Định Ngrok**:
+  - Tự động chạy tunnel ngrok với domain cố định: `relaxed-major-hen.ngrok-free.app`
+  - URL truy cập: `https://relaxed-major-hen.ngrok-free.app` (WebSocket: `wss://relaxed-major-hen.ngrok-free.app/ws`).
+  - Hỗ trợ truyền authtoken qua cờ `--authtoken=<token>` hoặc biến môi trường `NGROK_AUTHTOKEN`.
+  - Fallback linh hoạt sang Cloudflare Tunnel hoặc địa chỉ mạng nội bộ.
 - **Relay 2 chiều tức thì (Real-time Relay)**:
   - Nhận frame hình ảnh (JPEG/Base64 hoặc Binary bytes) từ điện thoại Android và phát tới tất cả Desktop/Web clients.
   - Tự động xoay màn hình (**Auto Screen Rotation**) theo tỷ lệ xoay Portrait (dọc) hoặc Landscape (ngang).
@@ -19,7 +24,6 @@
   - Lệnh dừng phiên từ xa: `disconnect`.
 - **An toàn luồng (Thread-Safe & Race-Free)**: Quản lý kết nối an toàn với mutex trên từng socket (`safeConn`), vượt qua kiểm tra với cờ `-race`.
 - **Hỗ trợ chạy Headless Server**: Cờ `--server-only` cho phép chạy dịch vụ nền trên VPS/Server mà không cần mở cửa sổ đồ họa.
-- **Tự động mở Cloudflare Tunnel**: Tạo đường truyền HTTPS/WSS ra Internet mà không cần mở port modem.
 - **Tự động cấu hình `adb reverse`**: Tự động chuyển tiếp cổng khi kết nối qua cáp USB.
 
 ### 2. Desktop Native GUI Viewer (Front-end Desktop Native Go)
