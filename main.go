@@ -436,9 +436,24 @@ func main() {
 
 	var windowCmd *exec.Cmd
 	if !*serverOnly {
-		time.Sleep(350 * time.Millisecond)
-		localURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-		windowCmd = launchAppWindow(localURL)
+		log.Println("[Cloudflare] Đang chờ lấy Cloudflare Tunnel URL công khai...")
+		// Chờ tối đa 8 giây để lấy được URL Cloudflare
+		targetURL := ""
+		for i := 0; i < 16; i++ {
+			u := getTunnelURL()
+			if u != "" {
+				targetURL = u
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		if targetURL == "" {
+			log.Println("[Cloudflare] Chưa lấy kịp link tunnel, fallback mở local")
+			targetURL = fmt.Sprintf("http://127.0.0.1:%d", port)
+		} else {
+			log.Printf("[Cloudflare] Đã lấy link Cloudflare thành công: %s", targetURL)
+		}
+		windowCmd = launchAppWindow(targetURL)
 	} else {
 		log.Println("[Headless Mode] Server đang chạy chế độ không mở cửa sổ GUI Desktop.")
 	}
