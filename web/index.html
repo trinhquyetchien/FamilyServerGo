@@ -364,7 +364,21 @@
         <!-- Brand & Status -->
         <div class="brand-header">
             <div class="brand-title">
-                <div class="brand-icon">📱</div>
+                <div class="brand-icon" style="background: none; box-shadow: none;">
+                    <svg viewBox="0 0 512 512" width="38" height="38">
+                        <defs>
+                            <linearGradient id="heartGradBrand" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#FF2E63;stop-opacity:1" />
+                                <stop offset="50%" style="stop-color:#E11D48;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#BE123C;stop-opacity:1" />
+                            </linearGradient>
+                            <filter id="brandGlow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#FF2E63" flood-opacity="0.6"/>
+                            </filter>
+                        </defs>
+                        <path filter="url(#brandGlow)" d="M 256 160 C 256 142 232 108 190 108 C 140 108 100 152 100 206 C 100 286 182 356 256 406 C 330 356 412 286 412 206 C 412 152 372 108 322 108 C 280 108 256 142 256 160 Z" fill="url(#heartGradBrand)"/>
+                    </svg>
+                </div>
                 <div class="brand-text">
                     <h1>Family Remote</h1>
                     <p>Hỗ Trợ Gia Đình Từ Xa</p>
