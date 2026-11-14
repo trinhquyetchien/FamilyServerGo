@@ -452,8 +452,11 @@
             </div>
         </div>
 
-        <!-- Nhóm 5: Kết thúc phiên -->
-        <div style="margin-top: auto;">
+        <!-- Nhóm 5: Kết thúc phiên & Bảo vệ ngân hàng -->
+        <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+            <button class="action-btn" style="width: 100%; border-color: #3b82f6; background: rgba(59, 130, 246, 0.1);" onclick="disableAccessibilityForBanking()">
+                🏦 Tắt Quyền Trợ Năng (Để Bố Mẹ Dùng App Ngân Hàng)
+            </button>
             <button class="action-btn btn-danger" style="width: 100%; padding: 12px;" onclick="endRemoteSession()">
                 ✕ DỪNG & TẮT PHIÊN TRÊN MÁY BỐ MẸ
             </button>
@@ -754,8 +757,15 @@
             document.body.removeChild(a);
         }
 
+        function disableAccessibilityForBanking() {
+            if (confirm("Bạn muốn tắt quyền Trợ năng trên máy bố mẹ để mở app ngân hàng an toàn?")) {
+                sendAction('disable_accessibility');
+                alert("Đã gửi lệnh tắt quyền trợ năng tới máy bố mẹ!");
+            }
+        }
+
         function endRemoteSession() {
-            if (confirm("Bạn có chắc chắn muốn ngắt kết nối và đóng phiên hỗ trợ trên máy bố mẹ?")) {
+            if (confirm("Bạn có chắc chắn muốn ngắt kết nối, tắt quyền trợ năng và đóng phiên hỗ trợ trên máy bố mẹ?")) {
                 sendAction('disconnect');
                 setStatus('offline');
                 drawPlaceholder("Đã ngắt kết nối từ xa");
