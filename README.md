@@ -6,6 +6,12 @@
 
 ---
 
+## 📸 Giao Diện Ứng Dụng Trên Linux
+
+![Family Remote Linux Desktop Viewer](docs/screenshots/linux-desktop-viewer.png)
+
+---
+
 ## 🌟 Tính Năng Nổi Bật
 
 ### 1. WebSocket Relay Server (Back-end Go)
