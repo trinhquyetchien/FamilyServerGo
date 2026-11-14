@@ -518,24 +518,11 @@ func main() {
 
 	var windowCmd *exec.Cmd
 	if !*serverOnly {
-		log.Println("[Cloudflare] Đang chờ lấy Cloudflare Tunnel URL công khai...")
-		// Chờ tối đa 6 giây để lấy được URL Cloudflare
-		targetURL := ""
-		for i := 0; i < 12; i++ {
-			u := getTunnelURL()
-			if u != "" {
-				targetURL = u
-				break
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
-		if targetURL == "" {
-			log.Println("[Cloudflare] Chưa lấy kịp link tunnel, mở giao diện Local")
-			targetURL = fmt.Sprintf("http://127.0.0.1:%d", port)
-		} else {
-			log.Printf("[Cloudflare] Mở cửa sổ ứng dụng theo URL Cloudflare: %s", targetURL)
-		}
-		windowCmd = launchAppWindow(targetURL)
+		// Luôn mở cửa sổ Native Desktop tại địa chỉ Localhost để giao diện mở tức thì,
+		// không phụ thuộc DNS công cộng và không bao giờ bị lỗi 'DNS_PROBE_FINISHED_NXDOMAIN'
+		localURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+		log.Printf("[Native Window] Đang mở cửa sổ ứng dụng tại: %s", localURL)
+		windowCmd = launchAppWindow(localURL)
 	} else {
 		log.Println("[Headless Mode] Server đang chạy chế độ không mở cửa sổ GUI Desktop.")
 	}
