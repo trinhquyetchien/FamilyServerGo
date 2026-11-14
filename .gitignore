@@ -1,0 +1,18 @@
+# Binaries
+family-remote
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, cover profiles
+*.test
+*.out
+
+# OS / Editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

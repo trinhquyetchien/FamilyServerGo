@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Hỗ Trợ Gia Đình
+Comment=Điều khiển và xem trực tiếp màn hình điện thoại từ xa qua Go Native Remote
+Exec=/home/trinhquyetchien/Projects/Main/Personal/FamilyServerGo/family-remote
+Icon=/home/trinhquyetchien/Projects/Main/Personal/FamilyServerGo/linux/icons/family-remote.svg
+Terminal=false
+Categories=Utility;RemoteAccess;
+StartupNotify=true
