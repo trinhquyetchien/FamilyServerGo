@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"flag"
@@ -12,7 +13,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"regexp"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -62,9 +62,9 @@ var (
 	webMu      sync.Mutex
 	webClients = make(map[*safeConn]bool)
 
-	fixedDomain = "relaxed-major-hen.ngrok-free.app"
-	tunnelURL   = "https://" + fixedDomain
-	tunnelMu    sync.RWMutex
+	gistID    = "4e0a00b1d77298132cdd79e44d7766b3"
+	tunnelURL string
+	tunnelMu  sync.RWMutex
 
 	// Thống kê frame
 	statsMu     sync.Mutex
@@ -302,58 +302,53 @@ func startFPSLogger() {
 	}()
 }
 
-func startNgrokTunnel(domain string, port int, authtoken string) *exec.Cmd {
-	cmdPath, err := exec.LookPath("ngrok")
-	if err != nil {
-		homeDir, _ := os.UserHomeDir()
-		localBin := homeDir + "/.local/bin/ngrok"
-		if _, err := os.Stat(localBin); err == nil {
-			cmdPath = localBin
+func updateGistURL(targetURL string) {
+	if gistID == "" || targetURL == "" {
+		return
+	}
+
+	// 1. Thử dùng gh CLI
+	if ghPath, err := exec.LookPath("gh"); err == nil {
+		cmd := exec.Command(ghPath, "api", "-X", "PATCH", "/gists/"+gistID,
+			"-f", "files[family_remote_url.txt][content]="+targetURL)
+		if err := cmd.Run(); err == nil {
+			log.Printf("📡 [Gist] Đã tự động cập nhật URL lên GitHub Gist thành công: %s", targetURL)
+			return
 		} else {
-			log.Println("[ngrok] Không tìm thấy lệnh 'ngrok', bỏ qua tunnel ngrok")
-			return nil
+			log.Printf("⚠️ [Gist] gh CLI lỗi (%v), thử phương thức HTTP...", err)
 		}
 	}
 
-	if authtoken != "" {
-		_ = exec.Command(cmdPath, "config", "add-authtoken", authtoken).Run()
+	// 2. Fallback dùng HTTP Client nếu có GITHUB_TOKEN
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		token = os.Getenv("GH_TOKEN")
 	}
-
-	args := []string{"http", fmt.Sprintf("--url=%s", domain), fmt.Sprintf("%d", port)}
-	log.Printf("[ngrok] Khởi chạy ngrok: %s %v", cmdPath, args)
-	cmd := exec.Command(cmdPath, args...)
-
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		log.Printf("[ngrok Pipe Error]: %v", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		log.Printf("[ngrok Start Error]: %v (sẽ fallback Cloudflare tunnel)", err)
-		return nil
-	}
-
-	// Đọc log để phát hiện lỗi xác thực hoặc kết nối thành công
-	if stderrPipe != nil {
-		go func() {
-			buf := make([]byte, 2048)
-			for {
-				n, err := stderrPipe.Read(buf)
-				if n > 0 {
-					out := string(buf[:n])
-					if strings.Contains(out, "ERR_NGROK_") {
-						log.Printf("[ngrok Error]: %s", strings.TrimSpace(out))
-						break
-					}
-				}
-				if err != nil {
-					break
+	if token != "" {
+		payload := map[string]interface{}{
+			"files": map[string]interface{}{
+				"family_remote_url.txt": map[string]string{
+					"content": targetURL,
+				},
+			},
+		}
+		data, _ := json.Marshal(payload)
+		req, err := http.NewRequest("PATCH", "https://api.github.com/gists/"+gistID, bytes.NewBuffer(data))
+		if err == nil {
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("Accept", "application/vnd.github+json")
+			req.Header.Set("Content-Type", "application/json")
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, err := client.Do(req)
+			if err == nil {
+				defer resp.Body.Close()
+				if resp.StatusCode == 200 {
+					log.Printf("📡 [Gist] Đã cập nhật URL lên GitHub Gist qua HTTP API: %s", targetURL)
+					return
 				}
 			}
-		}()
+		}
 	}
-
-	return cmd
 }
 
 func startCloudflaredTunnel(port int) *exec.Cmd {
@@ -397,6 +392,9 @@ func startCloudflaredTunnel(port int) *exec.Cmd {
 					log.Printf("🎉 CLOUDFLARE TUNNEL URL: %s", match)
 					log.Printf("WebSocket URL cho điện thoại: %s/ws", regexp.MustCompile(`^https://`).ReplaceAllString(match, "wss://"))
 					log.Printf("=======================================================")
+					
+					// Tự động publish URL lên GitHub Gist cho điện thoại Android tự động nhận
+					go updateGistURL(match)
 					break
 				}
 			}
@@ -440,10 +438,12 @@ func launchAppWindow(targetURL string) *exec.Cmd {
 func main() {
 	serverOnly := flag.Bool("server-only", false, "Chạy chế độ Headless WebSocket Relay Server (không mở giao diện Desktop GUI)")
 	portFlag := flag.Int("port", 8080, "Cổng lắng nghe của server")
-	domainFlag := flag.String("domain", fixedDomain, "Domain ngrok cố định")
-	authtokenFlag := flag.String("authtoken", os.Getenv("NGROK_AUTHTOKEN"), "ngrok authtoken (nếu cần thiết lập)")
-	useCloudflare := flag.Bool("cloudflare", false, "Ép buộc sử dụng Cloudflare tunnel ngầm thay vì ngrok")
+	gistFlag := flag.String("gist-id", gistID, "GitHub Gist ID dùng để lưu và chia sẻ tunnel URL")
 	flag.Parse()
+
+	if *gistFlag != "" {
+		gistID = *gistFlag
+	}
 
 	port := *portFlag
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -461,11 +461,6 @@ func main() {
 	}
 	l.Close()
 
-	// Thiết lập domain cố định
-	if *domainFlag != "" {
-		setTunnelURL("https://" + *domainFlag)
-	}
-
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleHTTP)
 	mux.HandleFunc("/ws", handleWebSocket)
@@ -478,12 +473,9 @@ func main() {
 	go func() {
 		log.Printf("=======================================================")
 		log.Printf("🚀 Family Remote Go Server đang chạy tại cổng :%d", port)
-		log.Printf("🌐 Web Viewer URL: http://localhost:%d", port)
+		log.Printf("🌐 Web Viewer Local URL: http://localhost:%d", port)
 		log.Printf("📱 Android WebSocket URL: ws://<IP>:%d/ws", port)
-		if *domainFlag != "" {
-			log.Printf("🔒 Domain cố định: https://%s", *domainFlag)
-			log.Printf("📱 Android WS (Internet): wss://%s/ws", *domainFlag)
-		}
+		log.Printf("📡 GitHub Gist Discovery: https://gist.github.com/trinhquyetchien/%s", gistID)
 		log.Printf("=======================================================")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Lỗi server HTTP/WebSocket: %v", err)
@@ -499,24 +491,28 @@ func main() {
 		}
 	}()
 
-	// Khởi chạy tunnel: Ưu tiên ngrok với domain cố định, fallback Cloudflare
-	var tunnelCmd *exec.Cmd
-	if !*useCloudflare && *domainFlag != "" {
-		tunnelCmd = startNgrokTunnel(*domainFlag, port, *authtokenFlag)
-	}
-	// Nếu không có ngrok hoặc chỉ định cloudflare -> khởi chạy Cloudflare
-	if tunnelCmd == nil {
-		tunnelCmd = startCloudflaredTunnel(port)
-	}
+	// Khởi chạy Cloudflare Tunnel ngầm tự động
+	tunnelCmd := startCloudflaredTunnel(port)
 
 	var windowCmd *exec.Cmd
 	if !*serverOnly {
-		// Mặc định mở cửa sổ với domain cố định nếu có, hoặc fallback local
-		targetURL := getTunnelURL()
-		if targetURL == "" {
-			targetURL = fmt.Sprintf("http://127.0.0.1:%d", port)
+		log.Println("[Cloudflare] Đang chờ lấy Cloudflare Tunnel URL công khai...")
+		// Chờ tối đa 6 giây để lấy được URL Cloudflare
+		targetURL := ""
+		for i := 0; i < 12; i++ {
+			u := getTunnelURL()
+			if u != "" {
+				targetURL = u
+				break
+			}
+			time.Sleep(500 * time.Millisecond)
 		}
-		log.Printf("[Native Window] Đang mở cửa sổ ứng dụng: %s", targetURL)
+		if targetURL == "" {
+			log.Println("[Cloudflare] Chưa lấy kịp link tunnel, mở giao diện Local")
+			targetURL = fmt.Sprintf("http://127.0.0.1:%d", port)
+		} else {
+			log.Printf("[Cloudflare] Mở cửa sổ ứng dụng theo URL Cloudflare: %s", targetURL)
+		}
 		windowCmd = launchAppWindow(targetURL)
 	} else {
 		log.Println("[Headless Mode] Server đang chạy chế độ không mở cửa sổ GUI Desktop.")

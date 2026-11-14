@@ -501,12 +501,9 @@
         let frameCount = 0;
         let currentFps = 0;
 
-        // URL WebSocket mặc định ưu tiên domain ngrok cố định
-        const FIXED_WS_URL = "wss://relaxed-major-hen.ngrok-free.app/ws";
+        // Tính toán WebSocket URL chuẩn xác theo HTTPS / HTTP / Cloudflare hiện tại
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let currentWsUrl = window.location.hostname.includes("ngrok") 
-            ? `${protocol}//${window.location.host}/ws` 
-            : FIXED_WS_URL;
+        let currentWsUrl = `${protocol}//${window.location.host}/ws`;
 
         function updateWsUrlDisplay(url) {
             currentWsUrl = url;
@@ -517,7 +514,7 @@
         }
         updateWsUrlDisplay(currentWsUrl);
 
-        // Lấy thông tin URL Tunnel động từ backend nếu có
+        // Lấy thông tin URL Tunnel động (Cloudflare Tunnel) từ backend
         fetch('/api/info')
             .then(res => res.json())
             .then(info => {

@@ -1,6 +1,6 @@
 # FamilyServerGo - Ứng Dụng Hỗ Trợ Điều Khiển Điện Thoại Từ Xa
 
-Ứng dụng Server & Desktop Native bằng Go (Golang) cho dự án hỗ trợ người thân điều khiển điện thoại từ xa qua mạng nội bộ hoặc Internet (ngrok domain cố định / Cloudflare Tunnel).
+Ứng dụng Server & Desktop Native bằng Go (Golang) cho dự án hỗ trợ người thân điều khiển điện thoại từ xa qua mạng nội bộ hoặc Internet (Cloudflare Tunnel tự động & GitHub Gist Discovery).
 
 Ứng dụng thay thế hoàn toàn Node.js server cũ, tích hợp cả **WebSocket Relay Server hiệu năng cao** và **Giao diện Desktop Native Client** trong một file thực thi duy nhất (`family-remote`).
 
@@ -16,11 +16,12 @@
 
 ### 1. WebSocket Relay Server (Back-end Go)
 - **Tương thích hoàn toàn với ứng dụng Android**: Lắng nghe WebSocket tại `/` và `/ws` trên cổng `8080`.
-- **Hỗ trợ Domain Cố Định Ngrok**:
-  - Tự động chạy tunnel ngrok với domain cố định: `relaxed-major-hen.ngrok-free.app`
-  - URL truy cập: `https://relaxed-major-hen.ngrok-free.app` (WebSocket: `wss://relaxed-major-hen.ngrok-free.app/ws`).
-  - Hỗ trợ truyền authtoken qua cờ `--authtoken=<token>` hoặc biến môi trường `NGROK_AUTHTOKEN`.
-  - Fallback linh hoạt sang Cloudflare Tunnel hoặc địa chỉ mạng nội bộ.
+- **Tự động Khởi Chạy Cloudflare Tunnel & Cập Nhật GitHub Gist**:
+  - Mặc định khởi chạy Cloudflare Tunnel: `cloudflared tunnel --url http://localhost:8080`.
+  - Khi nhận URL mới (ví dụ: `https://xyz.trycloudflare.com`), tự động đặt làm tunnelURL và phát hành lên **GitHub Gist**:
+    - **Gist ID**: `4e0a00b1d77298132cdd79e44d7766b3` (tệp `family_remote_url.txt`).
+    - Ứng dụng Android trên điện thoại chỉ cần đọc Gist này để tự động kết nối qua Internet mà không cần nhập link thủ công!
+  - Cửa sổ Native Desktop tự động mở tại URL Cloudflare này.
 - **Relay 2 chiều tức thì (Real-time Relay)**:
   - Nhận frame hình ảnh (JPEG/Base64 hoặc Binary bytes) từ điện thoại Android và phát tới tất cả Desktop/Web clients.
   - Tự động xoay màn hình (**Auto Screen Rotation**) theo tỷ lệ xoay Portrait (dọc) hoặc Landscape (ngang).
