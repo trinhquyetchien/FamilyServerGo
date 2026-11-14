@@ -455,10 +455,10 @@
         <!-- Nhóm 5: Kết thúc phiên & Bảo vệ ngân hàng -->
         <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
             <button class="action-btn" style="width: 100%; border-color: #3b82f6; background: rgba(59, 130, 246, 0.1);" onclick="disableAccessibilityForBanking()">
-                🏦 Tắt Quyền Trợ Năng (Để Bố Mẹ Dùng App Ngân Hàng)
+                🛡️ Tắt Trợ Năng (Ngân Hàng)
             </button>
             <button class="action-btn btn-danger" style="width: 100%; padding: 12px;" onclick="endRemoteSession()">
-                ✕ DỪNG & TẮT PHIÊN TRÊN MÁY BỐ MẸ
+                ✕ Dừng Phiên
             </button>
         </div>
     </aside>
@@ -514,15 +514,25 @@
         }
         updateWsUrlDisplay(currentWsUrl);
 
-        // Lấy thông tin URL Tunnel động (Cloudflare Tunnel) từ backend
-        fetch('/api/info')
-            .then(res => res.json())
-            .then(info => {
-                if (info && info.tunnel_url) {
-                    const tunnelWs = info.tunnel_url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/ws';
-                    updateWsUrlDisplay(tunnelWs);
-                }
-            }).catch(() => {});
+        // Polling liên tục mỗi 1.5s để lấy Cloudflare Tunnel URL công khai từ backend
+        let hasTunnelUrl = false;
+        function checkTunnelUrl() {
+            fetch('/api/info')
+                .then(res => res.json())
+                .then(info => {
+                    if (info && info.tunnel_url) {
+                        const tunnelWs = info.tunnel_url.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:') + '/ws';
+                        updateWsUrlDisplay(tunnelWs);
+                        hasTunnelUrl = true;
+                    }
+                }).catch(() => {})
+                .finally(() => {
+                    if (!hasTunnelUrl) {
+                        setTimeout(checkTunnelUrl, 1500);
+                    }
+                });
+        }
+        checkTunnelUrl();
 
         // Cập nhật FPS định kỳ
         setInterval(() => {

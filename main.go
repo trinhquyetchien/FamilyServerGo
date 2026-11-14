@@ -435,6 +435,26 @@ func launchAppWindow(targetURL string) *exec.Cmd {
 	return nil
 }
 
+func releasePortIfBusy(port int) {
+	// Kiểm tra xem cổng có đang bị chiếm không
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err == nil {
+		l.Close()
+		return
+	}
+
+	log.Printf("[Port] Cổng %d đang bị chiếm giữ, đang tiến hành giải phóng...", port)
+	// Dùng fuser để ngắt tiến trình chiếm cổng nếu có
+	if fuserPath, err := exec.LookPath("fuser"); err == nil {
+		_ = exec.Command(fuserPath, "-k", "-TERM", fmt.Sprintf("%d/tcp", port)).Run()
+		time.Sleep(300 * time.Millisecond)
+	}
+	// Tắt các tiến trình node server hoặc cloudflared cũ còn sót
+	_ = exec.Command("pkill", "-f", "node.*server.js").Run()
+	_ = exec.Command("pkill", "-f", fmt.Sprintf("cloudflared.*%d", port)).Run()
+	time.Sleep(300 * time.Millisecond)
+}
+
 func main() {
 	serverOnly := flag.Bool("server-only", false, "Chạy chế độ Headless WebSocket Relay Server (không mở giao diện Desktop GUI)")
 	portFlag := flag.Int("port", 8080, "Cổng lắng nghe của server")
@@ -446,10 +466,12 @@ func main() {
 	}
 
 	port := *portFlag
+	releasePortIfBusy(port)
+
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		if !*serverOnly {
-			log.Printf("Cổng %d đang bận, tự động chuyển cổng khác: %v", port, err)
+			log.Printf("Cổng %d vẫn bận sau khi giải phóng, tự động chuyển cổng khác: %v", port, err)
 			l, err = net.Listen("tcp", ":0")
 			if err != nil {
 				log.Fatalf("Không thể mở cổng server: %v", err)
